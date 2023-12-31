@@ -1,4 +1,4 @@
-module github.com/future-architect/go-mcprotocol
+module github.com/mokhae/go-mcprotocol
 
 go 1.13
 
