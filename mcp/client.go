@@ -54,18 +54,18 @@ func (c *client3E) HealthCheck() error {
 	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("Connect Error : %v", err))
 	}
 	defer conn.Close()
 
 	// Send message
 	err = conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("SetWriteDeadline Error : %v", err))
 	}
 
 	if _, err = conn.Write(payload); err != nil {
-		return err
+		return errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	// Receive message
@@ -76,7 +76,7 @@ func (c *client3E) HealthCheck() error {
 	}
 	readLen, err := conn.Read(readBuff)
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
 
 	resp := readBuff[:readLen]
@@ -114,7 +114,7 @@ func (c *client3E) Read(deviceName string, offset, numPoints int64) ([]byte, err
 	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
 	}
 	defer conn.Close()
 
@@ -124,7 +124,7 @@ func (c *client3E) Read(deviceName string, offset, numPoints int64) ([]byte, err
 		return nil, err
 	}
 	if _, err = conn.Write(payload); err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	// Receive message
@@ -135,7 +135,7 @@ func (c *client3E) Read(deviceName string, offset, numPoints int64) ([]byte, err
 	}
 	readLen, err := conn.Read(readBuff)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
 
 	return readBuff[:readLen], nil
@@ -157,7 +157,7 @@ func (c *client3E) BitRead(deviceName string, offset, numPoints int64) ([]byte, 
 	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
 	}
 	defer conn.Close()
 
@@ -167,7 +167,7 @@ func (c *client3E) BitRead(deviceName string, offset, numPoints int64) ([]byte, 
 		return nil, err
 	}
 	if _, err = conn.Write(payload); err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	// Receive message
@@ -178,7 +178,7 @@ func (c *client3E) BitRead(deviceName string, offset, numPoints int64) ([]byte, 
 	}
 	readLen, err := conn.Read(readBuff)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
 
 	return readBuff[:readLen], nil
@@ -201,7 +201,7 @@ func (c *client3E) Write(deviceName string, offset, numPoints int64, writeData [
 	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
 	}
 	defer conn.Close()
 
@@ -211,7 +211,7 @@ func (c *client3E) Write(deviceName string, offset, numPoints int64, writeData [
 		return nil, err
 	}
 	if _, err = conn.Write(payload); err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	// Receive message
@@ -222,7 +222,7 @@ func (c *client3E) Write(deviceName string, offset, numPoints int64, writeData [
 	}
 	readLen, err := conn.Read(readBuff)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
 	return readBuff[:readLen], nil
 }
