@@ -70,10 +70,10 @@ func (c *client3E) HealthCheck() error {
 
 	// Receive message
 	readBuff := make([]byte, 30)
-	err = conn.SetReadDeadline(time.Now().Add(c.readTimeout))
-	if err != nil {
-		return err
-	}
+	//err = conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	//if err != nil {
+	//	return err
+	//}
 	readLen, err := conn.Read(readBuff)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Read Error : %v", err))
@@ -214,12 +214,13 @@ func (c *client3E) Write(deviceName string, offset, numPoints int64, writeData [
 		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
-	// Receive message
+	//// Receive message
 	readBuff := make([]byte, 22) // 22 is response header size. [sub header + network num + unit i/o num + unit station num + response length + response code]
 	err = conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	if err != nil {
 		return nil, err
 	}
+
 	readLen, err := conn.Read(readBuff)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
