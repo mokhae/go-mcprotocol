@@ -4,7 +4,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"net"
+	"strings"
+	"syscall"
 	"time"
 )
 
@@ -21,6 +24,8 @@ type client3E struct {
 	tcpAddr *net.TCPAddr
 	// PLC address string
 	tcpAddrStr string
+	// Dialer
+	dialer net.Dialer
 	// Timeout
 	conTimeout   time.Duration
 	readTimeout  time.Duration
@@ -29,13 +34,50 @@ type client3E struct {
 	stn *station
 }
 
-func New3EClient(host string, port int, stn *station, conTimeout time.Duration, readTimeout time.Duration, writeTimeout time.Duration) (Client, error) {
+func New3EClient(host string, port int, stn *station, ethDevice string, localIP string, conTimeout time.Duration, readTimeout time.Duration, writeTimeout time.Duration) (Client, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%v:%v", host, port))
 	if err != nil {
 		return nil, err
 	}
 	tcpaddrstr := fmt.Sprintf("%v:%v", host, port)
-	return &client3E{tcpAddr: tcpAddr, tcpAddrStr: tcpaddrstr, conTimeout: conTimeout, readTimeout: readTimeout, writeTimeout: writeTimeout, stn: stn}, nil
+
+	ief, err := net.InterfaceByName(ethDevice)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := ief.Addrs()
+	if err != nil {
+		return nil, err
+	}
+
+	var localAddr net.Addr
+	for _, ip := range addrs {
+
+		if strings.Contains(ip.(*net.IPNet).IP.String(), localIP) {
+			localAddr = &net.TCPAddr{
+				IP: ip.(*net.IPNet).IP,
+			}
+			break
+		}
+	}
+
+	d := net.Dialer{LocalAddr: localAddr, Timeout: conTimeout, Control: ControlUnix}
+
+	return &client3E{tcpAddr: tcpAddr, tcpAddrStr: tcpaddrstr, dialer: d, conTimeout: conTimeout, readTimeout: readTimeout, writeTimeout: writeTimeout, stn: stn}, nil
+}
+
+func ControlUnix(network, address string, c syscall.RawConn) (err error) {
+	controlErr := c.Control(func(fd uintptr) {
+		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
+		if err != nil {
+			return
+		}
+		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+	})
+	if controlErr != nil {
+		err = controlErr
+	}
+	return
 }
 
 // MELSECコミュニケーションプロトコル p180
@@ -51,7 +93,7 @@ func (c *client3E) HealthCheck() error {
 
 	// TODO Keep-Alive
 	//d := net.Dialer{Timeout: time.Duration(1000)}
-	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Connect Error : %v", err))
@@ -111,7 +153,7 @@ func (c *client3E) Read(deviceName string, offset, numPoints int64) ([]byte, err
 		return nil, err
 	}
 
-	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
@@ -154,7 +196,7 @@ func (c *client3E) BitRead(deviceName string, offset, numPoints int64) ([]byte, 
 		return nil, err
 	}
 
-	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
@@ -198,7 +240,7 @@ func (c *client3E) Write(deviceName string, offset, numPoints int64, writeData [
 		return nil, err
 	}
 
-	conn, err := net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
 	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
