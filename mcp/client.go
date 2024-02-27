@@ -18,6 +18,7 @@ type Client interface {
 	HealthCheck() error
 	Connect() error
 	Disconnect() error
+	Reconnect() error
 }
 
 // client3E is 3E frame mcp client
@@ -104,6 +105,24 @@ func (c *client3E) Disconnect() error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Disconnect Error : %v", err))
 	}
+	return nil
+
+}
+
+func (c *client3E) Reconnect() error {
+
+	c.conn.Close()
+
+	time.Sleep(200 * time.Millisecond)
+
+	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Connect Error : %v", err))
+	}
+
+	c.conn = conn
+
 	return nil
 
 }
