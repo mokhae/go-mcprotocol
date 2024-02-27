@@ -16,6 +16,8 @@ type Client interface {
 	BitRead(deviceName string, offset, numPoints int64) ([]byte, error)
 	Write(deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
 	HealthCheck() error
+	Connect() error
+	Disconnect() error
 }
 
 // client3E is 3E frame mcp client
