@@ -32,6 +32,9 @@ type client3E struct {
 	writeTimeout time.Duration
 	// PLC station
 	stn *station
+
+	// PLC Conn
+	conn net.Conn
 }
 
 func New3EClient(host string, port int, stn *station, ethDevice string, localIP string, conTimeout time.Duration, readTimeout time.Duration, writeTimeout time.Duration) (Client, error) {
@@ -80,6 +83,29 @@ func ControlUnix(network, address string, c syscall.RawConn) (err error) {
 	return
 }
 
+func (c *client3E) Connect() error {
+	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Connect Error : %v", err))
+	}
+
+	c.conn = conn
+
+	return nil
+
+}
+
+func (c *client3E) Disconnect() error {
+
+	err := c.conn.Close()
+	if err != nil {
+		return errors.New(fmt.Sprintf("Disconnect Error : %v", err))
+	}
+	return nil
+
+}
+
 // MELSECコミュニケーションプロトコル p180
 // 11.4折返しテスト
 func (c *client3E) HealthCheck() error {
@@ -93,20 +119,21 @@ func (c *client3E) HealthCheck() error {
 
 	// TODO Keep-Alive
 	//d := net.Dialer{Timeout: time.Duration(1000)}
-	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
-	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Connect Error : %v", err))
-	}
-	defer conn.Close()
+
+	//conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	////conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
+	//if err != nil {
+	//	return errors.New(fmt.Sprintf("Connect Error : %v", err))
+	//}
+	//defer conn.Close()
 
 	// Send message
-	err = conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	err = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	if err != nil {
 		return errors.New(fmt.Sprintf("SetWriteDeadline Error : %v", err))
 	}
 
-	if _, err = conn.Write(payload); err != nil {
+	if _, err = c.conn.Write(payload); err != nil {
 		return errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
@@ -116,7 +143,7 @@ func (c *client3E) HealthCheck() error {
 	//if err != nil {
 	//	return err
 	//}
-	readLen, err := conn.Read(readBuff)
+	readLen, err := c.conn.Read(readBuff)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
@@ -153,29 +180,29 @@ func (c *client3E) Read(deviceName string, offset, numPoints int64) ([]byte, err
 		return nil, err
 	}
 
-	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
-	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
-	}
-	defer conn.Close()
+	//conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	////conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
+	//if err != nil {
+	//	return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
+	//}
+	//defer conn.Close()
 
 	// Send message
-	err = conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	err = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	if err != nil {
 		return nil, err
 	}
-	if _, err = conn.Write(payload); err != nil {
+	if _, err = c.conn.Write(payload); err != nil {
 		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	// Receive message
 	readBuff := make([]byte, 22+2*numPoints) // 22 is response header size. [sub header + network num + unit i/o num + unit station num + response length + response code]
-	err = conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	err = c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	if err != nil {
 		return nil, err
 	}
-	readLen, err := conn.Read(readBuff)
+	readLen, err := c.conn.Read(readBuff)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
@@ -196,29 +223,29 @@ func (c *client3E) BitRead(deviceName string, offset, numPoints int64) ([]byte, 
 		return nil, err
 	}
 
-	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
-	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
-	}
-	defer conn.Close()
+	//conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	////conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
+	//if err != nil {
+	//	return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
+	//}
+	//defer conn.Close()
 
 	// Send message
-	err = conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	err = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	if err != nil {
 		return nil, err
 	}
-	if _, err = conn.Write(payload); err != nil {
+	if _, err = c.conn.Write(payload); err != nil {
 		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	// Receive message
 	readBuff := make([]byte, 22+2*numPoints) // 22 is response header size. [sub header + network num + unit i/o num + unit station num + response length + response code]
-	err = conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	err = c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	if err != nil {
 		return nil, err
 	}
-	readLen, err := conn.Read(readBuff)
+	readLen, err := c.conn.Read(readBuff)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
@@ -240,30 +267,30 @@ func (c *client3E) Write(deviceName string, offset, numPoints int64, writeData [
 		return nil, err
 	}
 
-	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
-	//conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
-	}
-	defer conn.Close()
+	//conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
+	////conn, err := net.DialTCP("tcp", nil, c.tcpAddr)
+	//if err != nil {
+	//	return nil, errors.New(fmt.Sprintf("Connect Error : %v", err))
+	//}
+	//defer conn.Close()
 
 	// Send message
-	err = conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	err = c.conn.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	if err != nil {
 		return nil, err
 	}
-	if _, err = conn.Write(payload); err != nil {
+	if _, err = c.conn.Write(payload); err != nil {
 		return nil, errors.New(fmt.Sprintf("Write Error : %v", err))
 	}
 
 	//// Receive message
 	readBuff := make([]byte, 22) // 22 is response header size. [sub header + network num + unit i/o num + unit station num + response length + response code]
-	err = conn.SetReadDeadline(time.Now().Add(c.readTimeout))
+	err = c.conn.SetReadDeadline(time.Now().Add(c.readTimeout))
 	if err != nil {
 		return nil, err
 	}
 
-	readLen, err := conn.Read(readBuff)
+	readLen, err := c.conn.Read(readBuff)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Read Error : %v", err))
 	}
