@@ -19,7 +19,12 @@ type Client interface {
 	Connect() error
 	Disconnect() error
 	Reconnect() error
+	IsConnect() bool
 }
+
+var (
+	isconnect bool
+)
 
 // client3E is 3E frame mcp client
 type client3E struct {
@@ -37,7 +42,8 @@ type client3E struct {
 	stn *station
 
 	// PLC Conn
-	conn net.Conn
+	conn      net.Conn
+	isConnect bool
 }
 
 func New3EClient(host string, port int, stn *station, ethDevice string, localIP string, conTimeout time.Duration, readTimeout time.Duration, writeTimeout time.Duration) (Client, error) {
@@ -92,7 +98,7 @@ func (c *client3E) Connect() error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Connect Error : %v", err))
 	}
-
+	c.isConnect = true
 	c.conn = conn
 
 	return nil
@@ -103,9 +109,17 @@ func (c *client3E) Disconnect() error {
 
 	err := c.conn.Close()
 	if err != nil {
+		c.isConnect = false
 		return errors.New(fmt.Sprintf("Disconnect Error : %v", err))
 	}
+	c.isConnect = false
 	return nil
+
+}
+
+func (c *client3E) IsConnect() bool {
+
+	return c.isConnect
 
 }
 
