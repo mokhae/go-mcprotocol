@@ -4,10 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"net"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -79,7 +77,7 @@ func New3EClient(host string, port int, stn *station, ethDevice string, localIP 
 	return &client3E{tcpAddr: tcpAddr, tcpAddrStr: tcpaddrstr, dialer: d, conTimeout: conTimeout, readTimeout: readTimeout, writeTimeout: writeTimeout, stn: stn}, nil
 }
 
-func ControlUnix(network, address string, c syscall.RawConn) (err error) {
+/*func ControlUnix(network, address string, c syscall.RawConn) (err error) {
 	controlErr := c.Control(func(fd uintptr) {
 		err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
 		if err != nil {
@@ -91,7 +89,7 @@ func ControlUnix(network, address string, c syscall.RawConn) (err error) {
 		err = controlErr
 	}
 	return
-}
+}*/
 
 func (c *client3E) Connect() error {
 	conn, err := c.dialer.Dial("tcp", c.tcpAddrStr) //net.DialTimeout("tcp", c.tcpAddrStr, c.conTimeout)
