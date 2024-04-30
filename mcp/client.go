@@ -20,9 +20,9 @@ type Client interface {
 	IsConnect() bool
 }
 
-var (
-	isconnect bool
-)
+//var (
+//	isconnect bool
+//)
 
 // client3E is 3E frame mcp client
 type client3E struct {
