@@ -24,15 +24,16 @@ const (
 
 // deviceCodes is device name and hex value map
 var deviceCodes = map[string]string{
-	"X": "9C",
-	"Y": "9D",
-	"M": "90",
-	"L": "92",
-	"F": "93",
-	"V": "94",
-	"B": "A0",
-	"W": "B4",
-	"D": "A8",
+	"X":  "9C",
+	"Y":  "9D",
+	"M":  "90",
+	"L":  "92",
+	"F":  "93",
+	"V":  "94",
+	"B":  "A0",
+	"W":  "B4",
+	"D":  "A8",
+	"ZR": "B0",
 }
 
 // Each single PLC that is connected on MELSECNET and CC-Link IE is called a station.
