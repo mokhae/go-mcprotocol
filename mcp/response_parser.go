@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 )
@@ -27,7 +28,7 @@ type Response struct {
 	// Response data length
 	DataLen string
 	// Response data code
-	EndCode string
+	EndCode uint16
 	// Response data
 	Payload []byte
 	// error data
@@ -48,6 +49,8 @@ func (p *parser) Do(resp []byte) (*Response, error) {
 	endCodeB := resp[9:11]
 	payloadB := resp[11:]
 
+	endCode := binary.BigEndian.Uint16(endCodeB)
+
 	return &Response{
 		SubHeader:      fmt.Sprintf("%X", subHeaderB),
 		NetworkNum:     fmt.Sprintf("%X", networkNumB),
@@ -55,7 +58,7 @@ func (p *parser) Do(resp []byte) (*Response, error) {
 		UnitIONum:      fmt.Sprintf("%X", unitIONumB),
 		UnitStationNum: fmt.Sprintf("%X", unitStationNumB),
 		DataLen:        fmt.Sprintf("%X", dataLenB),
-		EndCode:        fmt.Sprintf("%X", endCodeB),
+		EndCode:        endCode, //fmt.Sprintf("%X", endCodeB),
 		Payload:        payloadB,
 	}, nil
 }
