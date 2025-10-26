@@ -2,8 +2,9 @@ package mcp
 
 import (
 	"encoding/hex"
-	"github.com/google/go-cmp/cmp"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestParser_Do(t *testing.T) {
@@ -22,7 +23,7 @@ func TestParser_Do(t *testing.T) {
 		UnitIONum:      "FF03",
 		UnitStationNum: "00",
 		DataLen:        "0400",
-		EndCode:        "0000",
+		EndCode:        0,
 		Payload:        []uint8{0x00, 0x00},
 		ErrInfo:        nil,
 	}
