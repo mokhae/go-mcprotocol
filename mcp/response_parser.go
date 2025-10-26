@@ -37,7 +37,7 @@ type Response struct {
 
 func (p *parser) Do(resp []byte) (*Response, error) {
 	if len(resp) < 11 {
-		return nil, errors.New("length must be larger than 22 byte")
+		return nil, errors.New(fmt.Sprintf("length must be larger than 11 byte: %v", resp))
 	}
 
 	subHeaderB := resp[0:2]
