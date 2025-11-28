@@ -44,7 +44,7 @@ type client3E struct {
 	isConnect bool
 }
 
-func New3EClient(host string, port int, stn *station, ethDevice string, localIP string, conTimeout time.Duration, readTimeout time.Duration, writeTimeout time.Duration) (Client, error) {
+func New3EClient(host string, port int, stn *station, ethDevice string, localIP string, conTimeout time.Duration, readTimeout time.Duration, writeTimeout time.Duration, localPort int) (Client, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%v:%v", host, port))
 	if err != nil {
 		return nil, err
@@ -64,9 +64,17 @@ func New3EClient(host string, port int, stn *station, ethDevice string, localIP 
 	for _, ip := range addrs {
 
 		if strings.Contains(ip.(*net.IPNet).IP.String(), localIP) {
-			localAddr = &net.TCPAddr{
-				IP: ip.(*net.IPNet).IP,
+			if localPort != 0 {
+				localAddr = &net.TCPAddr{
+					IP:   ip.(*net.IPNet).IP,
+					Port: localPort,
+				}
+			} else {
+				localAddr = &net.TCPAddr{
+					IP: ip.(*net.IPNet).IP,
+				}
 			}
+
 			break
 		}
 	}
