@@ -61,24 +61,28 @@ func New3EClient(host string, port int, stn *station, ethDevice string, localIP 
 	}
 
 	var localAddr net.Addr
-	for _, ip := range addrs {
+	if len(localIP) > 0 {
+		for _, ip := range addrs {
 
-		if strings.Contains(ip.(*net.IPNet).IP.String(), localIP) {
-			if localPort != 0 {
-				localAddr = &net.TCPAddr{
-					IP:   ip.(*net.IPNet).IP,
-					Port: localPort,
+			if strings.Contains(ip.(*net.IPNet).IP.String(), localIP) {
+				if localPort != 0 {
+					localAddr = &net.TCPAddr{
+						IP:   ip.(*net.IPNet).IP,
+						Port: localPort,
+					}
+				} else {
+					localAddr = &net.TCPAddr{
+						IP: ip.(*net.IPNet).IP,
+					}
 				}
+
+				break
 			} else {
-				localAddr = &net.TCPAddr{
-					IP: ip.(*net.IPNet).IP,
-				}
+				localAddr = nil
 			}
-
-			break
-		} else {
-			localAddr = nil
 		}
+	} else {
+		localAddr = nil
 	}
 
 	// , Control: ControlUnix
