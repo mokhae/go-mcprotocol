@@ -76,11 +76,16 @@ func New3EClient(host string, port int, stn *station, ethDevice string, localIP 
 			}
 
 			break
+		} else {
+			localAddr = nil
 		}
 	}
 
 	// , Control: ControlUnix
-	d := net.Dialer{LocalAddr: localAddr, Timeout: conTimeout}
+	d := net.Dialer{Timeout: conTimeout}
+	if localAddr != nil {
+		d = net.Dialer{LocalAddr: localAddr, Timeout: conTimeout}
+	}
 
 	return &client3E{tcpAddr: tcpAddr, tcpAddrStr: tcpaddrstr, dialer: d, conTimeout: conTimeout, readTimeout: readTimeout, writeTimeout: writeTimeout, stn: stn}, nil
 }
