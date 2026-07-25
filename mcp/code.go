@@ -1,9 +1,8 @@
 package mcp
 
 import (
-	"bytes"
-	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 )
 
 // PLC Data communication code.
@@ -29,8 +28,12 @@ func (c Code) EncodeHex(s string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(decode)%2 != 0 {
+		return nil, fmt.Errorf("binary word data must contain an even number of bytes")
+	}
 
-	buff := new(bytes.Buffer)
-	_ = binary.Write(buff, binary.LittleEndian, decode)
-	return buff.Bytes(), nil
+	for i := 0; i < len(decode); i += 2 {
+		decode[i], decode[i+1] = decode[i+1], decode[i]
+	}
+	return decode, nil
 }

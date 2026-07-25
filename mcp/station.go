@@ -48,6 +48,28 @@ type station struct {
 	unitStationNum string
 }
 
+func (h *station) validate() error {
+	if h == nil {
+		return &ValidationError{Field: "station", Reason: "must not be nil"}
+	}
+	fields := []struct {
+		name  string
+		value string
+		size  int
+	}{
+		{name: "networkNum", value: h.networkNum, size: 1},
+		{name: "pcNum", value: h.pcNum, size: 1},
+		{name: "unitIONum", value: h.unitIONum, size: 2},
+		{name: "unitStationNum", value: h.unitStationNum, size: 1},
+	}
+	for _, field := range fields {
+		if err := validateHexField(field.name, field.value, field.size); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func NewStation(networkNum, pcNum, unitIONum, unitStationNum string) *station {
 	return &station{
 		networkNum:     networkNum,

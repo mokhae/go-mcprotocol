@@ -11,7 +11,22 @@ go-mcprotocol is a library for PLC (Programmable Logic Controller) access
 You can read plc register bellow codes.
 
 ```go
-	client, _ := mcp.New3EClient(opts.Host, opts.Port, mcp.NewLocalStation())
+	client, _ := mcp.New3EClient(
+		opts.Host,
+		opts.Port,
+		mcp.NewLocalStation(),
+		"", // network interface (empty uses the OS default route)
+		"", // local IP
+		3*time.Second,
+		3*time.Second,
+		3*time.Second,
+		0, // local port
+	)
+	if err := client.Connect(); err != nil {
+		log.Fatal(err)
+	}
+	defer client.Disconnect()
+
 	read, _ := client.Read("D", 100, 3)
 	registerBinary, _ := mcp.NewParser().Do(read)
 
@@ -25,6 +40,21 @@ You can read plc register bellow codes.
 		log.Fatalf("failed health check for plc: %v", err)
 	}
 ```
+
+#### Context and errors
+
+All network operations have context-aware variants such as `ReadContext`,
+`WriteContext`, `HealthCheckContext`, and `ConnectContext`. A canceled or timed
+out transaction closes the connection because a partial 3E response cannot be
+safely matched to a later request; call `ReconnectContext` before retrying.
+
+Invalid arguments return `*mcp.ValidationError`, malformed frames return
+`*mcp.ProtocolError`, and PLC End Code responses return `*mcp.MCError`. Use
+`errors.Is` and `errors.As` to inspect wrapped errors.
+
+Requests on one client are serialized because a 3E frame does not carry a
+transaction identifier. Use multiple clients if independent parallel PLC
+transactions are required.
 
 ## Usage Tool
 

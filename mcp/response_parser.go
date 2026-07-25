@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 )
 
@@ -37,7 +36,21 @@ type Response struct {
 
 func (p *parser) Do(resp []byte) (*Response, error) {
 	if len(resp) < 11 {
-		return nil, errors.New(fmt.Sprintf("length must be larger than 11 byte:/%v/", resp))
+		return nil, &ProtocolError{Reason: fmt.Sprintf("frame must be at least 11 bytes, got %d", len(resp))}
+	}
+	if resp[0] != 0xD0 || resp[1] != 0x00 {
+		return nil, &ProtocolError{Reason: fmt.Sprintf("unexpected response subheader %X", resp[0:2])}
+	}
+
+	dataLen := int(binary.LittleEndian.Uint16(resp[7:9]))
+	if dataLen < 2 {
+		return nil, &ProtocolError{Reason: fmt.Sprintf("data length must include the 2-byte end code, got %d", dataLen)}
+	}
+	expectedLen := 9 + dataLen
+	if len(resp) != expectedLen {
+		return nil, &ProtocolError{
+			Reason: fmt.Sprintf("frame length is %d bytes but data length declares %d bytes", len(resp), expectedLen),
+		}
 	}
 
 	subHeaderB := resp[0:2]
@@ -47,9 +60,14 @@ func (p *parser) Do(resp []byte) (*Response, error) {
 	unitStationNumB := resp[6:7]
 	dataLenB := resp[7:9]
 	endCodeB := resp[9:11]
-	payloadB := resp[11:]
 
-	endCode := binary.BigEndian.Uint16(endCodeB)
+	endCode := binary.LittleEndian.Uint16(endCodeB)
+	var payload, errInfo []byte
+	if endCode == 0 {
+		payload = append([]byte(nil), resp[11:]...)
+	} else {
+		errInfo = append([]byte(nil), resp[11:]...)
+	}
 
 	return &Response{
 		SubHeader:      fmt.Sprintf("%X", subHeaderB),
@@ -59,6 +77,7 @@ func (p *parser) Do(resp []byte) (*Response, error) {
 		UnitStationNum: fmt.Sprintf("%X", unitStationNumB),
 		DataLen:        fmt.Sprintf("%X", dataLenB),
 		EndCode:        endCode, //fmt.Sprintf("%X", endCodeB),
-		Payload:        payloadB,
+		Payload:        payload,
+		ErrInfo:        errInfo,
 	}, nil
 }

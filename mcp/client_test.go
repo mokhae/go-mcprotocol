@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -31,10 +32,14 @@ func TestClient3E_Read(t *testing.T) {
 		t.Skip("environment variable PLC_TEST_PORT is not set")
 	}
 
-	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", 1000, 1000, 1000)
+	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", time.Second, time.Second, time.Second, 0)
 	if err != nil {
 		t.Fatalf("PLC does not exists? %v", err)
 	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect to PLC: %v", err)
+	}
+	defer client.Disconnect()
 
 	// 1 device
 	resp1, err := client.Read("D", 100, 1)
@@ -74,10 +79,14 @@ func TestClient3E_BitRead(t *testing.T) {
 		t.Skip("environment variable PLC_TEST_PORT is not set")
 	}
 
-	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", 1000, 1000, 1000)
+	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", time.Second, time.Second, time.Second, 0)
 	if err != nil {
 		t.Fatalf("PLC does not exists? %v", err)
 	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect to PLC: %v", err)
+	}
+	defer client.Disconnect()
 
 	// 1 device
 	resp1, err := client.BitRead("B", 0, 1)
@@ -130,12 +139,16 @@ func TestClient3E_Write(t *testing.T) {
 		t.Skip("environment variable PLC_TEST_PORT is not set")
 	}
 
-	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", 1000, 1000, 1000)
+	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", time.Second, time.Second, time.Second, 0)
 	if err != nil {
 		t.Fatalf("PLC does not exists? %v", err)
 	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect to PLC: %v", err)
+	}
+	defer client.Disconnect()
 
-	_, err = client.Write("D", 100, 4, []byte("test"))
+	_, err = client.Write("D", 100, 4, []byte("testtest"))
 	if err != nil {
 		t.Fatalf("unexpected mcp write err: %v", err)
 	}
@@ -150,10 +163,14 @@ func TestClient3E_Ping(t *testing.T) {
 		t.Skip("environment variable PLC_TEST_PORT is not set")
 	}
 
-	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", 1000, 1000, 1000)
+	client, err := New3EClient(testPLCHost, testPLCPort, NewLocalStation(), "", "", time.Second, time.Second, time.Second, 0)
 	if err != nil {
 		t.Fatalf("PLC does not exists? %v", err)
 	}
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect to PLC: %v", err)
+	}
+	defer client.Disconnect()
 
 	if err := client.HealthCheck(); err != nil {
 		t.Fatalf("unexpected error occured %v", err)
