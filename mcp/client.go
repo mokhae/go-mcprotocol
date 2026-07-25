@@ -21,6 +21,8 @@ type Client interface {
 	BitReadContext(ctx context.Context, deviceName string, offset, numPoints int64) ([]byte, error)
 	Write(deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
 	WriteContext(ctx context.Context, deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
+	BitWrite(deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
+	BitWriteContext(ctx context.Context, deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
 	HealthCheck() error
 	HealthCheckContext(ctx context.Context) error
 	Connect() error
@@ -282,6 +284,39 @@ func (c *client3E) WriteContext(ctx context.Context, deviceName string, offset, 
 	raw, _, err := c.exchange(ctx, payload)
 	if err != nil {
 		return nil, fmt.Errorf("write: %w", err)
+	}
+	return raw, nil
+}
+
+// BitWrite writes device points in bit units (command 1401, subcommand 0001).
+//
+// deviceName must be a bit device such as 'M' or 'B'. Word devices like D / W / ZR
+// are rejected with a *ValidationError: a 3E frame addresses a device by head
+// device number plus device code and carries no bit position, so a single bit of a
+// word device cannot be addressed.
+//
+// Only the requested points are updated, the remaining bits of the same word are
+// left untouched by the CPU. No client side read-modify-write is involved, so
+// there is no race against the ladder scan.
+//
+// writeData holds 1 point per 4 bits, so it must be exactly (numPoints+1)/2 bytes.
+// Use PackBits to build it from []bool. A write rejected by the PLC is reported as
+// a *MCError carrying the end code.
+func (c *client3E) BitWrite(deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error) {
+	return c.BitWriteContext(context.Background(), deviceName, offset, numPoints, writeData)
+}
+
+func (c *client3E) BitWriteContext(ctx context.Context, deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error) {
+	if err := validateBitWriteRequest(deviceName, offset, numPoints, writeData); err != nil {
+		return nil, err
+	}
+	payload, err := hex.DecodeString(c.stn.BuildBitWriteRequest(deviceName, offset, numPoints, writeData))
+	if err != nil {
+		return nil, fmt.Errorf("build bit write request: %w", err)
+	}
+	raw, _, err := c.exchange(ctx, payload)
+	if err != nil {
+		return nil, fmt.Errorf("bit write: %w", err)
 	}
 	return raw, nil
 }

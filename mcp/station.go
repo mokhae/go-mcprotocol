@@ -16,11 +16,26 @@ const (
 	READ_SUB_COMMAND     = "0000"
 	BIT_READ_SUB_COMMAND = "0100"
 
-	WRITE_COMMAND     = "0114" // binary mode expression. if ascii mode then 1401
-	WRITE_SUB_COMMAND = "0000"
+	WRITE_COMMAND         = "0114" // binary mode expression. if ascii mode then 1401
+	WRITE_SUB_COMMAND     = "0000"
+	BIT_WRITE_SUB_COMMAND = "0100" // binary mode expression. if ascii mode then 0001
 
 	MONITORING_TIMER = "1000" // 3[sec]
 )
+
+// bitDeviceNames is the set of device names that can be accessed in bit units.
+// The MC protocol bit unit commands (1401/0001, 1402/0001) carry no bit position
+// field, only a head device number and a device code, so word devices such as
+// D / W / ZR cannot be addressed one bit at a time.
+var bitDeviceNames = map[string]bool{
+	"X": true,
+	"Y": true,
+	"M": true,
+	"L": true,
+	"F": true,
+	"V": true,
+	"B": true,
+}
 
 // deviceCodes is device name and hex value map
 var deviceCodes = map[string]string{
@@ -234,6 +249,77 @@ func (h *station) BuildWriteRequest(deviceName string, offset, numPoints int64, 
 		MONITORING_TIMER +
 		WRITE_COMMAND +
 		WRITE_SUB_COMMAND +
+		offsetHex +
+		deviceCode +
+		points +
+		writeHex
+}
+
+// PackBits converts one bool per point into the 4bit-per-point layout that the
+// MC protocol batch write in bit units expects.
+//
+// The 1st point goes to the upper 4 bits of the 1st byte, the 2nd point to the
+// lower 4 bits, and so on. When the number of points is odd the lower 4 bits of
+// the last byte are filled with 0.
+//
+//	PackBits([]bool{true, false, true, false, false, false, true, true})
+//	// -> []byte{0x10, 0x10, 0x00, 0x11}
+func PackBits(bits []bool) []byte {
+	packed := make([]byte, (len(bits)+1)/2)
+	for i, b := range bits {
+		if !b {
+			continue
+		}
+		if i%2 == 0 {
+			packed[i/2] |= 0x10 // upper 4 bits
+		} else {
+			packed[i/2] |= 0x01 // lower 4 bits
+		}
+	}
+	return packed
+}
+
+// BuildBitWriteRequest represents MCP batch write in bit units command.
+// deviceName is a bit device code name like 'M'.
+// offset is device offset addr.
+// numPoints is number of write device points, in bits.
+// writeData is the write data in the 4bit-per-point layout, so it holds
+// (numPoints+1)/2 bytes. Use PackBits to build it from []bool.
+// Arguments are validated by validateBitWriteRequest before this is called.
+func (h *station) BuildBitWriteRequest(deviceName string, offset, numPoints int64, writeData []byte) string {
+
+	// get device symbol hex layout
+	deviceCode := deviceCodes[deviceName]
+
+	// offset convert to little endian layout
+	// MELSECコミュニケーションプロトコル リファレンス(p67) MELSEC-Q/L: 3[byte], MELSEC iQ-R: 4[byte]
+	offsetBuff := new(bytes.Buffer)
+	_ = binary.Write(offsetBuff, binary.LittleEndian, offset)
+	offsetHex := fmt.Sprintf("%X", offsetBuff.Bytes()[0:3]) // 仮にQシリーズとするので3byte trim
+
+	// 1 point per 4 bits, so 2 points are packed into 1 byte
+	writeHex := fmt.Sprintf("%X", writeData)
+
+	// write points
+	pointsBuff := new(bytes.Buffer)
+	_ = binary.Write(pointsBuff, binary.LittleEndian, numPoints)
+	points := fmt.Sprintf("%X", pointsBuff.Bytes()[0:2]) // 2byte固定
+
+	// data length
+	requestCharLen := len(MONITORING_TIMER+WRITE_COMMAND+BIT_WRITE_SUB_COMMAND+deviceCode+offsetHex+points+writeHex) / 2 // 1byte=2char
+	dataLenBuff := new(bytes.Buffer)
+	_ = binary.Write(dataLenBuff, binary.LittleEndian, int64(requestCharLen))
+	dataLen := fmt.Sprintf("%X", dataLenBuff.Bytes()[0:2]) // 2byte固定
+
+	return SUB_HEADER +
+		h.networkNum +
+		h.pcNum +
+		h.unitIONum +
+		h.unitStationNum +
+		dataLen +
+		MONITORING_TIMER +
+		WRITE_COMMAND +
+		BIT_WRITE_SUB_COMMAND +
 		offsetHex +
 		deviceCode +
 		points +
