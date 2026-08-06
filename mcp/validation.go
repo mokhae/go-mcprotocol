@@ -9,6 +9,10 @@ const (
 	maxDeviceAddress int64 = 0xFFFFFF
 	maxWordPoints    int64 = 960
 	maxBitPoints     int64 = 7168
+	// maxRandomBitPoints is a structural limit: a random write request carries the
+	// number of points in a single byte. The CPU may accept fewer, and reports that
+	// as an end code.
+	maxRandomBitPoints = 255
 )
 
 func validateDeviceRequest(deviceName string, offset, numPoints, maxPoints int64) error {
@@ -77,6 +81,38 @@ func validateBitWriteRequest(deviceName string, offset, numPoints int64, writeDa
 			Field:  "writeData",
 			Value:  fmt.Sprintf("%#02x at index %d", writeData[expectedLen-1], expectedLen-1),
 			Reason: fmt.Sprintf("lower 4 bits are padding for the odd point count %d so must be 0", numPoints),
+		}
+	}
+	return nil
+}
+
+// validateBitWriteRandomRequest validates a random write in bit units request.
+// Every point is addressed on its own, so each one is checked separately.
+func validateBitWriteRandomRequest(points []BitPoint) error {
+	if len(points) < 1 {
+		return &ValidationError{
+			Field:  "points",
+			Value:  len(points),
+			Reason: "must contain at least 1 device point",
+		}
+	}
+	if len(points) > maxRandomBitPoints {
+		return &ValidationError{
+			Field:  "points",
+			Value:  len(points),
+			Reason: fmt.Sprintf("must not exceed %d, the request carries the number of points in a single byte", maxRandomBitPoints),
+		}
+	}
+	for i, p := range points {
+		if err := validateDeviceRequest(p.DeviceName, p.Offset, 1, maxBitPoints); err != nil {
+			return fmt.Errorf("points[%d]: %w", i, err)
+		}
+		if !bitDeviceNames[p.DeviceName] {
+			return &ValidationError{
+				Field:  fmt.Sprintf("points[%d].DeviceName", i),
+				Value:  p.DeviceName,
+				Reason: "is a word device, random write in bit units accepts bit devices only",
+			}
 		}
 	}
 	return nil

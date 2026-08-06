@@ -100,3 +100,71 @@ func TestValidateBitWriteRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestStation_BuildBitWriteRandomRequest(t *testing.T) {
+	station := NewLocalStation()
+
+	// turn M50 ON and Y2F OFF in one request
+	request := station.BuildBitWriteRandomRequest([]BitPoint{
+		{DeviceName: "M", Offset: 0x32, Value: true},
+		{DeviceName: "Y", Offset: 0x2F, Value: false},
+	})
+	//              sub    net    pc     io       stn    len     timer   cmd     sub     points
+	want := "5000" + "00" + "FF" + "FF03" + "00" + "1100" + "1000" + "0214" + "0100" + "02" +
+		"320000" + "90" + "01" + // M50 ON
+		"2F0000" + "9D" + "00" // Y2F OFF
+	if request != want {
+		t.Fatalf("expected %v but actual is %v", want, request)
+	}
+
+	// a single point still carries its own device
+	request = station.BuildBitWriteRandomRequest([]BitPoint{{DeviceName: "M", Offset: 100, Value: true}})
+	want = "5000" + "00" + "FF" + "FF03" + "00" + "0C00" + "1000" + "0214" + "0100" + "01" +
+		"640000" + "90" + "01"
+	if request != want {
+		t.Fatalf("expected %v but actual is %v", want, request)
+	}
+}
+
+func TestValidateBitWriteRandomRequest(t *testing.T) {
+	tooMany := make([]BitPoint, maxRandomBitPoints+1)
+	for i := range tooMany {
+		tooMany[i] = BitPoint{DeviceName: "M", Offset: int64(i), Value: true}
+	}
+	atLimit := tooMany[:maxRandomBitPoints]
+
+	tests := []struct {
+		name    string
+		points  []BitPoint
+		wantErr bool
+	}{
+		{name: "ok mixed devices", points: []BitPoint{{DeviceName: "M", Offset: 50, Value: true}, {DeviceName: "Y", Offset: 0x2F}, {DeviceName: "B", Offset: 7, Value: true}}},
+		{name: "ok at the single byte limit", points: atLimit},
+
+		{name: "nil points", points: nil, wantErr: true},
+		{name: "empty points", points: []BitPoint{}, wantErr: true},
+		{name: "over the single byte limit", points: tooMany, wantErr: true},
+		{name: "word device D is rejected", points: []BitPoint{{DeviceName: "D", Offset: 100, Value: true}}, wantErr: true},
+		{name: "word device ZR is rejected", points: []BitPoint{{DeviceName: "ZR", Offset: 100, Value: true}}, wantErr: true},
+		{name: "unknown device", points: []BitPoint{{DeviceName: "QQ", Offset: 100, Value: true}}, wantErr: true},
+		{name: "offset out of 3byte range", points: []BitPoint{{DeviceName: "M", Offset: maxDeviceAddress + 1, Value: true}}, wantErr: true},
+		{name: "negative offset", points: []BitPoint{{DeviceName: "M", Offset: -1, Value: true}}, wantErr: true},
+		{name: "a bad point after a good one", points: []BitPoint{{DeviceName: "M", Offset: 1, Value: true}, {DeviceName: "D", Offset: 2}}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateBitWriteRandomRequest(tt.points)
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			var validationErr *ValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error = %v, want *ValidationError", err)
+			}
+		})
+	}
+}

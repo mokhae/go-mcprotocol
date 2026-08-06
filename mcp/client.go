@@ -23,6 +23,8 @@ type Client interface {
 	WriteContext(ctx context.Context, deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
 	BitWrite(deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
 	BitWriteContext(ctx context.Context, deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
+	BitWriteRandom(points []BitPoint) ([]byte, error)
+	BitWriteRandomContext(ctx context.Context, points []BitPoint) ([]byte, error)
 	HealthCheck() error
 	HealthCheckContext(ctx context.Context) error
 	Connect() error
@@ -317,6 +319,38 @@ func (c *client3E) BitWriteContext(ctx context.Context, deviceName string, offse
 	raw, _, err := c.exchange(ctx, payload)
 	if err != nil {
 		return nil, fmt.Errorf("bit write: %w", err)
+	}
+	return raw, nil
+}
+
+// BitWriteRandom writes scattered device points in bit units
+// (command 1402, subcommand 0001), called 'test' in the manual.
+//
+// Use this instead of BitWrite when the points are not a contiguous range, for
+// example M100 and B7 and Y2F in one request. Every point carries its own device,
+// so they need not share a device name. As with BitWrite only the requested points
+// are updated and the remaining bits of the same word are left untouched, so there
+// is no client side read-modify-write and no race against the ladder scan.
+//
+// Every point must name a bit device. Word devices like D / W / ZR are rejected
+// with a *ValidationError. The number of points is sent as a single byte, so at
+// most 255 points fit in one request, and the CPU may accept fewer. A write
+// rejected by the PLC is reported as a *MCError carrying the end code.
+func (c *client3E) BitWriteRandom(points []BitPoint) ([]byte, error) {
+	return c.BitWriteRandomContext(context.Background(), points)
+}
+
+func (c *client3E) BitWriteRandomContext(ctx context.Context, points []BitPoint) ([]byte, error) {
+	if err := validateBitWriteRandomRequest(points); err != nil {
+		return nil, err
+	}
+	payload, err := hex.DecodeString(c.stn.BuildBitWriteRandomRequest(points))
+	if err != nil {
+		return nil, fmt.Errorf("build bit write random request: %w", err)
+	}
+	raw, _, err := c.exchange(ctx, payload)
+	if err != nil {
+		return nil, fmt.Errorf("bit write random: %w", err)
 	}
 	return raw, nil
 }

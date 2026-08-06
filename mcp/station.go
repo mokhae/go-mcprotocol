@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -20,8 +21,20 @@ const (
 	WRITE_SUB_COMMAND     = "0000"
 	BIT_WRITE_SUB_COMMAND = "0100" // binary mode expression. if ascii mode then 0001
 
+	RANDOM_WRITE_COMMAND         = "0214" // binary mode expression. if ascii mode then 1402
+	RANDOM_BIT_WRITE_SUB_COMMAND = "0100" // binary mode expression. if ascii mode then 0001
+
 	MONITORING_TIMER = "1000" // 3[sec]
 )
+
+// BitPoint is a single device point of a random write in bit units.
+// DeviceName must be a bit device such as 'M', Offset is the device number and
+// Value is the state to write, true for ON.
+type BitPoint struct {
+	DeviceName string
+	Offset     int64
+	Value      bool
+}
 
 // bitDeviceNames is the set of device names that can be accessed in bit units.
 // The MC protocol bit unit commands (1401/0001, 1402/0001) carry no bit position
@@ -324,6 +337,54 @@ func (h *station) BuildBitWriteRequest(deviceName string, offset, numPoints int6
 		deviceCode +
 		points +
 		writeHex
+}
+
+// BuildBitWriteRandomRequest represents MCP random write in bit units command,
+// called 'test' in the manual.
+//
+// Unlike the batch commands the points are not a contiguous range, so each point
+// carries its own device: device number 3[byte] + device code 1[byte] + value
+// 1[byte], where the value is 01 for ON and 00 for OFF. The number of points is
+// sent as a single byte, so at most maxRandomBitPoints points fit in one request.
+// Arguments are validated by validateBitWriteRandomRequest before this is called.
+func (h *station) BuildBitWriteRandomRequest(points []BitPoint) string {
+
+	// number of bit access points is 1[byte], unlike the 2[byte] points of the batch commands
+	pointsHex := fmt.Sprintf("%02X", len(points))
+
+	var body strings.Builder
+	for _, p := range points {
+		// offset convert to little endian layout
+		// MELSECコミュニケーションプロトコル リファレンス(p67) MELSEC-Q/L: 3[byte], MELSEC iQ-R: 4[byte]
+		offsetBuff := new(bytes.Buffer)
+		_ = binary.Write(offsetBuff, binary.LittleEndian, p.Offset)
+		body.WriteString(fmt.Sprintf("%X", offsetBuff.Bytes()[0:3])) // 仮にQシリーズとするので3byte trim
+		body.WriteString(deviceCodes[p.DeviceName])
+		if p.Value {
+			body.WriteString("01")
+		} else {
+			body.WriteString("00")
+		}
+	}
+	bodyHex := body.String()
+
+	// data length
+	requestCharLen := len(MONITORING_TIMER+RANDOM_WRITE_COMMAND+RANDOM_BIT_WRITE_SUB_COMMAND+pointsHex+bodyHex) / 2 // 1byte=2char
+	dataLenBuff := new(bytes.Buffer)
+	_ = binary.Write(dataLenBuff, binary.LittleEndian, int64(requestCharLen))
+	dataLen := fmt.Sprintf("%X", dataLenBuff.Bytes()[0:2]) // 2byte固定
+
+	return SUB_HEADER +
+		h.networkNum +
+		h.pcNum +
+		h.unitIONum +
+		h.unitStationNum +
+		dataLen +
+		MONITORING_TIMER +
+		RANDOM_WRITE_COMMAND +
+		RANDOM_BIT_WRITE_SUB_COMMAND +
+		pointsHex +
+		bodyHex
 }
 
 func (h *station) BuildAccessPath() {
