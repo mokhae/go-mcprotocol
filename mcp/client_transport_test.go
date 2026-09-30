@@ -518,3 +518,84 @@ func TestBitWriteRandomRejectsWordDeviceBeforeSending(t *testing.T) {
 		}
 	}
 }
+
+func TestWordWriteRandomContextSendsRandomWordFrame(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := newPipeClient(clientConn)
+	defer client.Disconnect()
+
+	requests := make(chan []byte, 1)
+	go func() {
+		defer serverConn.Close()
+		request, err := readTestFrame(serverConn)
+		if err != nil {
+			close(requests)
+			return
+		}
+		requests <- request
+		_, _ = serverConn.Write(testResponse(request, 0, nil))
+	}()
+
+	if _, err := client.WordWriteRandomContext(context.Background(),
+		[]WordPoint{{DeviceName: "D", Offset: 100, Value: 0x1234}},
+		[]DWordPoint{{DeviceName: "D", Offset: 200, Value: 0x12345678}},
+	); err != nil {
+		t.Fatalf("WordWriteRandomContext returned an error: %v", err)
+	}
+	request, ok := <-requests
+	if !ok {
+		t.Fatal("test server did not read a request frame")
+	}
+	// sub header, access route, data length, monitoring timer, command 1402,
+	// sub command 0000, word and double word counts, then the points
+	want := []byte{
+		0x50, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00,
+		0x16, 0x00,
+		0x10, 0x00,
+		0x02, 0x14,
+		0x00, 0x00,
+		0x01, 0x01,
+		0x64, 0x00, 0x00, 0xA8, 0x34, 0x12, // D100
+		0xC8, 0x00, 0x00, 0xA8, 0x78, 0x56, 0x34, 0x12, // D200-D201
+	}
+	if !bytes.Equal(request, want) {
+		t.Fatalf("request frame = %X, want %X", request, want)
+	}
+}
+
+func TestWordWriteRandomContextReportsEndCodeAsMCError(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := newPipeClient(clientConn)
+	defer client.Disconnect()
+
+	go func() {
+		defer serverConn.Close()
+		request, err := readTestFrame(serverConn)
+		if err != nil {
+			return
+		}
+		// 0xC0B2 is the station refusing a request it has no room for
+		_, _ = serverConn.Write(testResponse(request, 0xC0B2, []byte{0x02, 0x14}))
+	}()
+
+	_, err := client.WordWriteRandomContext(context.Background(), []WordPoint{{DeviceName: "D", Offset: 1, Value: 1}}, nil)
+	var mcErr *MCError
+	if !errors.As(err, &mcErr) || mcErr.EndCode != 0xC0B2 {
+		t.Fatalf("error = %v, want *MCError 0xC0B2", err)
+	}
+}
+
+func TestWordWriteRandomRejectsBitDeviceBeforeSending(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	client := newPipeClient(clientConn)
+	defer client.Disconnect()
+	defer serverConn.Close()
+
+	// a bit device point must fail without touching the connection,
+	// even when it follows a valid word device point
+	_, err := client.WordWriteRandom([]WordPoint{{DeviceName: "D", Offset: 1}, {DeviceName: "M", Offset: 2}}, nil)
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) {
+		t.Fatalf("error = %v, want *ValidationError", err)
+	}
+}

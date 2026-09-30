@@ -25,6 +25,8 @@ type Client interface {
 	BitWriteContext(ctx context.Context, deviceName string, offset, numPoints int64, writeData []byte) ([]byte, error)
 	BitWriteRandom(points []BitPoint) ([]byte, error)
 	BitWriteRandomContext(ctx context.Context, points []BitPoint) ([]byte, error)
+	WordWriteRandom(words []WordPoint, dwords []DWordPoint) ([]byte, error)
+	WordWriteRandomContext(ctx context.Context, words []WordPoint, dwords []DWordPoint) ([]byte, error)
 	HealthCheck() error
 	HealthCheckContext(ctx context.Context) error
 	Connect() error
@@ -351,6 +353,29 @@ func (c *client3E) BitWriteRandomContext(ctx context.Context, points []BitPoint)
 	raw, _, err := c.exchange(ctx, payload)
 	if err != nil {
 		return nil, fmt.Errorf("bit write random: %w", err)
+	}
+	return raw, nil
+}
+
+// WordWriteRandom writes word and double word points at scattered addresses in
+// one request (random write in word units, 1402/0000). Every point must name a
+// word device, and 12 x words + 14 x double words must not exceed 1920. A write
+// rejected by the PLC is reported as a *MCError carrying the end code.
+func (c *client3E) WordWriteRandom(words []WordPoint, dwords []DWordPoint) ([]byte, error) {
+	return c.WordWriteRandomContext(context.Background(), words, dwords)
+}
+
+func (c *client3E) WordWriteRandomContext(ctx context.Context, words []WordPoint, dwords []DWordPoint) ([]byte, error) {
+	if err := validateWordWriteRandomRequest(words, dwords); err != nil {
+		return nil, err
+	}
+	payload, err := hex.DecodeString(c.stn.BuildWordWriteRandomRequest(words, dwords))
+	if err != nil {
+		return nil, fmt.Errorf("build word write random request: %w", err)
+	}
+	raw, _, err := c.exchange(ctx, payload)
+	if err != nil {
+		return nil, fmt.Errorf("word write random: %w", err)
 	}
 	return raw, nil
 }

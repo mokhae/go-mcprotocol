@@ -168,3 +168,84 @@ func TestValidateBitWriteRandomRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestStation_BuildWordWriteRandomRequest(t *testing.T) {
+	station := NewLocalStation()
+
+	// D100 = 0x1234 as a word point and D200 = 0x12345678 as a double word point
+	request := station.BuildWordWriteRandomRequest(
+		[]WordPoint{{DeviceName: "D", Offset: 100, Value: 0x1234}},
+		[]DWordPoint{{DeviceName: "D", Offset: 200, Value: 0x12345678}},
+	)
+	//              sub    net    pc     io       stn    len     timer   cmd     sub     words dwords
+	want := "5000" + "00" + "FF" + "FF03" + "00" + "1600" + "1000" + "0214" + "0000" + "01" + "01" +
+		"640000" + "A8" + "3412" + // D100
+		"C80000" + "A8" + "78563412" // D200-D201
+	if request != want {
+		t.Fatalf("expected %v but actual is %v", want, request)
+	}
+
+	// words only: the double word count is still sent, as 00
+	request = station.BuildWordWriteRandomRequest(
+		[]WordPoint{{DeviceName: "ZR", Offset: 338001, Value: 0}, {DeviceName: "ZR", Offset: 338003, Value: 1}}, nil,
+	)
+	want = "5000" + "00" + "FF" + "FF03" + "00" + "1400" + "1000" + "0214" + "0000" + "02" + "00" +
+		"512805" + "B0" + "0000" + // ZR338001 = 0x052851
+		"532805" + "B0" + "0100" // ZR338003
+	if request != want {
+		t.Fatalf("expected %v but actual is %v", want, request)
+	}
+}
+
+func TestValidateWordWriteRandomRequest(t *testing.T) {
+	words := func(n int) []WordPoint {
+		points := make([]WordPoint, n)
+		for i := range points {
+			points[i] = WordPoint{DeviceName: "D", Offset: int64(i)}
+		}
+		return points
+	}
+	dwords := func(n int) []DWordPoint {
+		points := make([]DWordPoint, n)
+		for i := range points {
+			points[i] = DWordPoint{DeviceName: "D", Offset: int64(1000 + 2*i)}
+		}
+		return points
+	}
+	tests := []struct {
+		name    string
+		words   []WordPoint
+		dwords  []DWordPoint
+		wantErr bool
+	}{
+		{name: "ok words and dwords", words: words(2), dwords: dwords(1)},
+		{name: "ok dwords only", dwords: dwords(3)},
+		{name: "ok 160 words is the unit limit", words: words(160)},
+		{name: "ok 137 dwords fits 1920 units", dwords: dwords(137)},
+
+		{name: "no points", wantErr: true},
+		{name: "161 words exceeds 1920 units", words: words(161), wantErr: true},
+		{name: "150 words and 10 dwords exceeds 1920 units", words: words(150), dwords: dwords(10), wantErr: true},
+		{name: "bit device M is rejected", words: []WordPoint{{DeviceName: "M", Offset: 1}}, wantErr: true},
+		{name: "bit device in dwords is rejected", dwords: []DWordPoint{{DeviceName: "X", Offset: 1}}, wantErr: true},
+		{name: "unknown device", words: []WordPoint{{DeviceName: "QQ", Offset: 1}}, wantErr: true},
+		{name: "offset out of 3byte range", words: []WordPoint{{DeviceName: "D", Offset: maxDeviceAddress + 1}}, wantErr: true},
+		{name: "dword crossing the 3byte limit", dwords: []DWordPoint{{DeviceName: "D", Offset: maxDeviceAddress}}, wantErr: true},
+		{name: "negative offset", words: []WordPoint{{DeviceName: "D", Offset: -1}}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateWordWriteRandomRequest(tt.words, tt.dwords)
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			var validationErr *ValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error = %v, want *ValidationError", err)
+			}
+		})
+	}
+}

@@ -21,8 +21,9 @@ const (
 	WRITE_SUB_COMMAND     = "0000"
 	BIT_WRITE_SUB_COMMAND = "0100" // binary mode expression. if ascii mode then 0001
 
-	RANDOM_WRITE_COMMAND         = "0214" // binary mode expression. if ascii mode then 1402
-	RANDOM_BIT_WRITE_SUB_COMMAND = "0100" // binary mode expression. if ascii mode then 0001
+	RANDOM_WRITE_COMMAND          = "0214" // binary mode expression. if ascii mode then 1402
+	RANDOM_BIT_WRITE_SUB_COMMAND  = "0100" // binary mode expression. if ascii mode then 0001
+	RANDOM_WORD_WRITE_SUB_COMMAND = "0000" // binary mode expression. if ascii mode then 0000
 
 	MONITORING_TIMER = "1000" // 3[sec]
 )
@@ -34,6 +35,22 @@ type BitPoint struct {
 	DeviceName string
 	Offset     int64
 	Value      bool
+}
+
+// WordPoint is a single word of a random write in word units.
+// DeviceName must be a word device such as 'D', Offset is the device number.
+type WordPoint struct {
+	DeviceName string
+	Offset     int64
+	Value      uint16
+}
+
+// DWordPoint is a double word (two consecutive devices, low word first) of a
+// random write in word units.
+type DWordPoint struct {
+	DeviceName string
+	Offset     int64
+	Value      uint32
 }
 
 // bitDeviceNames is the set of device names that can be accessed in bit units.
@@ -384,6 +401,57 @@ func (h *station) BuildBitWriteRandomRequest(points []BitPoint) string {
 		RANDOM_WRITE_COMMAND +
 		RANDOM_BIT_WRITE_SUB_COMMAND +
 		pointsHex +
+		bodyHex
+}
+
+// BuildWordWriteRandomRequest represents MCP random write in word units command
+// (1402/0000). Word points and double word points are counted separately, one
+// byte each, then every point carries device number 3[byte] + device code
+// 1[byte] + value (2[byte] for a word, 4[byte] for a double word), little endian.
+// Arguments are validated by validateWordWriteRandomRequest before this is called.
+func (h *station) BuildWordWriteRandomRequest(words []WordPoint, dwords []DWordPoint) string {
+
+	// the numbers of word and double word access points are 1[byte] each
+	countsHex := fmt.Sprintf("%02X%02X", len(words), len(dwords))
+
+	var body strings.Builder
+	writePoint := func(deviceName string, offset int64, value []byte) {
+		// offset convert to little endian layout
+		// MELSECコミュニケーションプロトコル リファレンス(p67) MELSEC-Q/L: 3[byte], MELSEC iQ-R: 4[byte]
+		offsetBuff := new(bytes.Buffer)
+		_ = binary.Write(offsetBuff, binary.LittleEndian, offset)
+		body.WriteString(fmt.Sprintf("%X", offsetBuff.Bytes()[0:3])) // 仮にQシリーズとするので3byte trim
+		body.WriteString(deviceCodes[deviceName])
+		body.WriteString(fmt.Sprintf("%X", value))
+	}
+	for _, p := range words {
+		value := make([]byte, 2)
+		binary.LittleEndian.PutUint16(value, p.Value)
+		writePoint(p.DeviceName, p.Offset, value)
+	}
+	for _, p := range dwords {
+		value := make([]byte, 4)
+		binary.LittleEndian.PutUint32(value, p.Value)
+		writePoint(p.DeviceName, p.Offset, value)
+	}
+	bodyHex := body.String()
+
+	// data length
+	requestCharLen := len(MONITORING_TIMER+RANDOM_WRITE_COMMAND+RANDOM_WORD_WRITE_SUB_COMMAND+countsHex+bodyHex) / 2 // 1byte=2char
+	dataLenBuff := new(bytes.Buffer)
+	_ = binary.Write(dataLenBuff, binary.LittleEndian, int64(requestCharLen))
+	dataLen := fmt.Sprintf("%X", dataLenBuff.Bytes()[0:2]) // 2byte固定
+
+	return SUB_HEADER +
+		h.networkNum +
+		h.pcNum +
+		h.unitIONum +
+		h.unitStationNum +
+		dataLen +
+		MONITORING_TIMER +
+		RANDOM_WRITE_COMMAND +
+		RANDOM_WORD_WRITE_SUB_COMMAND +
+		countsHex +
 		bodyHex
 }
 

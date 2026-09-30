@@ -13,6 +13,14 @@ const (
 	// number of points in a single byte. The CPU may accept fewer, and reports that
 	// as an end code.
 	maxRandomBitPoints = 255
+	// maxRandomWordUnits bounds a random write in word units: the MELSEC
+	// communication protocol reference allows 12 x word points + 14 x double
+	// word points up to 1920 (160 words when writing words only).
+	maxRandomWordUnits = 1920
+	randomWordUnits    = 12
+	randomDWordUnits   = 14
+	// maxRandomWordPoints is the structural limit of each single-byte count.
+	maxRandomWordPoints = 255
 )
 
 func validateDeviceRequest(deviceName string, offset, numPoints, maxPoints int64) error {
@@ -113,6 +121,52 @@ func validateBitWriteRandomRequest(points []BitPoint) error {
 				Value:  p.DeviceName,
 				Reason: "is a word device, random write in bit units accepts bit devices only",
 			}
+		}
+	}
+	return nil
+}
+
+// validateWordWriteRandomRequest validates a random write in word units request.
+// Every point is addressed on its own, so each one is checked separately.
+func validateWordWriteRandomRequest(words []WordPoint, dwords []DWordPoint) error {
+	if len(words)+len(dwords) < 1 {
+		return &ValidationError{Field: "points", Value: 0, Reason: "must contain at least 1 word or double word point"}
+	}
+	if len(words) > maxRandomWordPoints || len(dwords) > maxRandomWordPoints {
+		return &ValidationError{
+			Field:  "points",
+			Value:  fmt.Sprintf("%d words, %d double words", len(words), len(dwords)),
+			Reason: fmt.Sprintf("each count must not exceed %d, the request carries it in a single byte", maxRandomWordPoints),
+		}
+	}
+	if units := randomWordUnits*len(words) + randomDWordUnits*len(dwords); units > maxRandomWordUnits {
+		return &ValidationError{
+			Field:  "points",
+			Value:  units,
+			Reason: fmt.Sprintf("12 x words + 14 x double words must not exceed %d", maxRandomWordUnits),
+		}
+	}
+	check := func(field, deviceName string, offset, points int64) error {
+		if err := validateDeviceRequest(deviceName, offset, points, maxWordPoints); err != nil {
+			return fmt.Errorf("%s: %w", field, err)
+		}
+		if bitDeviceNames[deviceName] {
+			return &ValidationError{
+				Field:  field + ".DeviceName",
+				Value:  deviceName,
+				Reason: "is a bit device, random write in word units accepts word devices only",
+			}
+		}
+		return nil
+	}
+	for i, p := range words {
+		if err := check(fmt.Sprintf("words[%d]", i), p.DeviceName, p.Offset, 1); err != nil {
+			return err
+		}
+	}
+	for i, p := range dwords {
+		if err := check(fmt.Sprintf("dwords[%d]", i), p.DeviceName, p.Offset, 2); err != nil {
+			return err
 		}
 	}
 	return nil

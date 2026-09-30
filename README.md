@@ -41,6 +41,20 @@ You can read plc register bellow codes.
 	}
 ```
 
+#### Random write
+
+Scattered devices can be written in one request instead of one request per
+address. `BitWriteRandom` (1402/0001) sets bit devices; `WordWriteRandom`
+(1402/0000) writes word and double word (low word first) points of word
+devices, up to 12 x words + 14 x double words <= 1920 per request.
+
+```go
+	_, err := client.WordWriteRandom(
+		[]mcp.WordPoint{{DeviceName: "D", Offset: 100, Value: 1}, {DeviceName: "ZR", Offset: 338003, Value: 0}},
+		[]mcp.DWordPoint{{DeviceName: "D", Offset: 200, Value: 0x12345678}},
+	)
+```
+
 #### Context and errors
 
 All network operations have context-aware variants such as `ReadContext`,
